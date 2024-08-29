@@ -14,7 +14,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from django.utils.encoding import force_bytes
 
-from core.settings import SMTP_SERVER, SMTP_PORT, SMTP_PASSWORD, SMTP_EMAIL, DOMAIN
+from altered_datum_api.settings import SMTP_SERVER, SMTP_PORT, SMTP_PASSWORD, SMTP_EMAIL, DOMAIN
 from .models import NewUser
 from .serializers import CustomUserSerializer, UserDetailsSerializer, ChangePasswordSerializer, UpdateUserSerializer, \
     ActivateAccount, ForgetPassword, ResetPassword
