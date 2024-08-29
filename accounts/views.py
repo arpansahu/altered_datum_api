@@ -14,7 +14,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from django.utils.encoding import force_bytes
 
-from altered_datum_api.settings import SMTP_SERVER, SMTP_PORT, SMTP_PASSWORD, SMTP_EMAIL, DOMAIN
+from altered_datum_api.settings import EMAIL_HOST, EMAIL_PORT, EMAIL_HOST_PASSWORD, DEFAULT_FROM_EMAIL, DOMAIN
 from .models import NewUser
 from .serializers import CustomUserSerializer, UserDetailsSerializer, ChangePasswordSerializer, UpdateUserSerializer, \
     ActivateAccount, ForgetPassword, ResetPassword
@@ -29,7 +29,7 @@ from email.mime.text import MIMEText
 
 # def send_mail_account_activate(reciever_email, user, SUBJECT="Activate Your Account"):
 #     port = 465  # For SSL
-#     smtp_server = "smtp.gmail.com"
+#     EMAIL_HOST = "smtp.gmail.com"
 #     # message = render_to_string(template_name='account/activate_account_mail.html', context={
 #     #     'user': user,
 #     #     'protocol': 'http',
@@ -95,13 +95,13 @@ from email.mime.text import MIMEText
 #     """.format(reciever_email, urlsafe_base64_encode(force_bytes(user.pk)), account_activation_token.make_token(user))
 #     part = MIMEText(text, "html")
 #     message.attach(part)
-#     with smtplib.SMTP_SSL(smtp_server, port) as server:
+#     with smtplib.SMTP_SSL(EMAIL_HOST, port) as server:
 #         server.login(sender_email, password)
 #         server.sendmail(sender_email, reciever_email, message)
 
 def send_mail_account_activate(reciever_email, user, SUBJECT="Activate Your Account"):
     port = 465
-    smtp_server = SMTP_SERVER
+    EMAIL_HOST = EMAIL_HOST
     message = render_to_string(template_name='account/activate_account_mail.html', context={
         'user': user,
         'protocol': 'http',
@@ -111,9 +111,9 @@ def send_mail_account_activate(reciever_email, user, SUBJECT="Activate Your Acco
     })
     context = ssl.create_default_context()
 
-    with smtplib.SMTP_SSL(smtp_server, port, context=context) as server:
-        server.login(SMTP_EMAIL, SMTP_PASSWORD)
-        server.sendmail(SMTP_EMAIL, reciever_email, message)
+    with smtplib.SMTP_SSL(EMAIL_HOST, port, context=context) as server:
+        server.login(DEFAULT_FROM_EMAIL, EMAIL_HOST_PASSWORD)
+        server.sendmail(DEFAULT_FROM_EMAIL, reciever_email, message)
     print("account activation mail send")
 
 
@@ -204,8 +204,8 @@ class AccountActivateView(APIView):
 
 
 def send_mail_password_reset(reciever_email, user, SUBJECT="Activate Your Account"):
-    port = SMTP_PORT  # For SSL
-    smtp_server = SMTP_SERVER
+    port = EMAIL_PORT  # For SSL
+    EMAIL_HOST = EMAIL_HOST
     message = render_to_string(template_name='account/password_reset_mail.html', context={
         'user': user,
         'protocol': 'http',
@@ -216,9 +216,9 @@ def send_mail_password_reset(reciever_email, user, SUBJECT="Activate Your Accoun
 
     context = ssl.create_default_context()
 
-    with smtplib.SMTP_SSL(smtp_server, port, context=context) as server:
-        server.login(SMTP_EMAIL, SMTP_PASSWORD)
-        server.sendmail(SMTP_EMAIL, reciever_email, message)
+    with smtplib.SMTP_SSL(EMAIL_HOST, port, context=context) as server:
+        server.login(DEFAULT_FROM_EMAIL, EMAIL_HOST_PASSWORD)
+        server.sendmail(DEFAULT_FROM_EMAIL, reciever_email, message)
 
 
 class ForgetPasswordView(APIView):
