@@ -384,7 +384,7 @@ LOGGING = {
     },
 }
 
-CSRF_TRUSTED_ORIGINS = ['https://altered-datum-api.arpansahu.me', ]
+# CSRF_TRUSTED_ORIGINS = ['https://altered-datum-api.arpansahu.me', ]
 
 # CORS_ALLOWED_ORIGINS = [
 #     "http://localhost:3000",
