@@ -4,6 +4,7 @@ from rest_framework.schemas import get_schema_view
 from rest_framework.documentation import include_docs_urls
 from django.conf import settings
 from django.conf.urls.static import static
+import time
 
 urlpatterns = [
     path('', include('blog.urls', namespace='blog')),
@@ -24,6 +25,9 @@ urlpatterns = [
         description="API for the BlogAPI",
         version="1.0.0"
     ), name='openapi-schema'),
+    #sentry test view 
+    path('sentry-debug/', trigger_error),
+    path('large_resource/', large_resource)
 ]
 
 if settings.DEBUG:
