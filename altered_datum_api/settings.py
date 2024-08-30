@@ -384,14 +384,14 @@ LOGGING = {
     },
 }
 
-CSRF_TRUSTED_ORIGINS = ['https://arpansahu.me', ]
+CSRF_TRUSTED_ORIGINS = ['https://altered-datum-api.arpansahu.me', ]
 
-# CORS_ALLOWED_ORIGINS = [
-#     "http://localhost:3000",
-#     "http://127.0.0.1:3000",
-#     "http://localhost:8000",
-#     "http://127.0.0.1:8000",
-#     'https://react-materialui-complete.herokuapp.com'
-# ]
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "http://localhost:8000",
+    "http://127.0.0.1:8000",
+    'https://altered-datum.arpansahu.me'
+]
 
-CORS_ALLOW_ALL_ORIGINS = True
+# CORS_ALLOW_ALL_ORIGINS = True
