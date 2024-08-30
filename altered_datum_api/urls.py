@@ -6,6 +6,13 @@ from django.conf import settings
 from django.conf.urls.static import static
 import time
 
+def trigger_error(request):
+    division_by_zero = 1 / 0
+
+def large_resource(request):
+   time.sleep(4)
+   return HttpResponse("Done!")
+   
 urlpatterns = [
     path('', include('blog.urls', namespace='blog')),
     # Oauth
