@@ -13,6 +13,7 @@ from rest_framework.generics import UpdateAPIView, RetrieveAPIView
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from django.utils.encoding import force_bytes
+from django.shortcuts import render
 
 from altered_datum_api.settings import EMAIL_HOST, EMAIL_PORT, EMAIL_HOST_PASSWORD, DEFAULT_FROM_EMAIL, DOMAIN
 from .models import NewUser
@@ -264,3 +265,19 @@ class ResetPasswordView(APIView):
             else:
                 return Response("Activation link expired activated", status=status.HTTP_403_FORBIDDEN)
         return Response("Password Reset Successfully")
+
+
+def error_404(request, exception):
+    return render(request, 'error/error_404.html')
+
+
+def error_400(request, exception):
+    return render(request, 'error/error_400.html')
+
+
+def error_403(request, exception):
+    return render(request, 'error/error_403.html')
+
+
+def error_500(request):
+    return render(request, 'error/error_500.html')

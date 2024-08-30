@@ -1,0 +1,30 @@
+{% extends 'blog/base.html' %}
+{% load static %}
+{% block content %}
+
+  <div class="container text-center my-5">
+        <div class="row justify-content-center no-gutters">
+            <div class="col-12 col-md-10 col-lg-8">
+                <div class="card card-plain p-4">
+                    <div class="card-header pb-0 text-left bg-transparent">
+                        <h3 class="font-weight-bolder text-danger text-gradient text-center">
+                            Error 500
+                        </h3>
+                        <p class="mb-0 text-danger text-center">
+                          Server Error - If the problem persists, please access support.
+                        </p>
+                    </div>
+                    <div class="card-body text-center">
+                        <a href="/" class="btn bg-gradient-info w-100 mt-4 mb-0">HOME</a>
+                    </div>
+                    <div class="card-footer text-center pt-0 px-lg-2 px-1">
+                        <p class="mb-4 text-sm mx-auto">
+                            Contact
+                            <a href="https://arpansahu.me/contact/" class="text-info text-gradient font-weight-bold">Support</a>
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+  </div>
+{% endblock %}

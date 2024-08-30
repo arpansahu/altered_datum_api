@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: altered-datum-api-service
+spec:
+  selector:
+    app: altered-datum-api
+  ports:
+    - protocol: TCP
+      port: 8004
+      targetPort: 8004
+      nodePort: 32004
+  type: NodePort

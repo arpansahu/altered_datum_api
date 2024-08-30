@@ -1,18 +1,25 @@
 {% load static %}
 
 <style>
-        .container {
-            object-position: bottom;
-          width: auto;
-          max-width: 680px;
-          padding: 0 15px;
+    .footer-container {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        width: 100%;
+        background-color: #f8f9fa; /* Light gray background for better visibility */
+        text-align: center;
+        padding: 10px 0;
+        box-shadow: 0 -1px 5px rgba(0, 0, 0, 0.1); /* Add a slight shadow for separation */
+        margin: 0; /* Ensure no margin is causing the footer to not extend fully */
+    }
 
-        }
-
+    .footer-container h6 {
+        margin: 0;
+        font-size: 14px;
+        color: #6c757d; /* Muted text color */
+    }
 </style>
 
-<div class="container">
-    <span class="text-muted" >
-        <h6>© Altered Datum LLP, Inc. All rights reserved.</h6>
-    </span>
+<div class="footer-container">
+    <h6>© Altered Datum LLP, Inc. All rights reserved.</h6>
 </div>

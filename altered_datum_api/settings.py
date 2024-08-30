@@ -2,6 +2,10 @@ from pathlib import Path
 from datetime import timedelta
 import os
 from decouple import config
+import sentry_sdk
+from sentry_sdk.integrations.django import DjangoIntegration
+import django
+from django.db.models.signals import pre_init
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -47,22 +51,22 @@ INSTALLED_APPS = [
     'oauth2_provider',
     'social_django',
     'drf_social_oauth2',
+    'check_service_health'
 ]
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'corsheaders.middleware.CorsMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
-    # Oauth
-    # 'social_django.middleware.SocialAuthExceptionMiddleware',
-    #
     'django.middleware.common.CommonMiddleware',
-    # 'django.middleware.csrf.CsrfViewMiddleware',
+    'django.middleware.csrf.CsrfViewMiddleware',  # Enable CSRF protection
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    # whitenoise
-    'whitenoise.middleware.WhiteNoiseMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',  # For serving static files in production
+    # Optional middlewares:
+    'django.middleware.locale.LocaleMiddleware',  # Handles language preferences
+    'social_django.middleware.SocialAuthExceptionMiddleware',  # For handling social auth exceptions
 ]
 
 ROOT_URLCONF = 'altered_datum_api.urls'
@@ -144,7 +148,7 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/3.1/howto/static-files/
 # AWS S3
-if  DEBUG:
+if not DEBUG:
     if BUCKET_TYPE == 'AWS':
         AWS_S3_CUSTOM_DOMAIN = f'{AWS_STORAGE_BUCKET_NAME}.s3.amazonaws.com'
         AWS_DEFAULT_ACL = 'public-read'
@@ -234,15 +238,6 @@ else:
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 STATICFILES_DIRS = [os.path.join(BASE_DIR, "static"), ]
 
-# CORS_ALLOWED_ORIGINS = [
-#     "http://localhost:3000",
-#     "http://127.0.0.1:3000",
-#     "http://localhost:8000",
-#     "http://127.0.0.1:8000",
-#     'https://react-materialui-complete.herokuapp.com'
-# ]
-
-# CORS_ALLOW_ALL_ORIGINS = True
 
 REST_FRAMEWORK = {
     'DEFAULT_PERMISSION_CLASSES': [
@@ -303,3 +298,100 @@ EMAIL_USE_TLS = True
 DEFAULT_FROM_EMAIL = MAIL_JET_EMAIL_ADDRESS
 
 PASSWORD_RESET_TIMEOUT = 60
+
+
+#Caching
+CACHES = {
+    'default': {
+        'BACKEND': 'django_redis.cache.RedisCache',
+        'LOCATION': REDIS_CLOUD_URL,
+        'OPTIONS': {
+            'CLIENT_CLASS': 'django_redis.client.DefaultClient',
+        },
+        'KEY_PREFIX': PROJECT_NAME
+    }
+}
+
+# Get the current git commit hash
+def get_git_commit_hash():
+    try:
+        return subprocess.check_output(['git', 'rev-parse', 'HEAD']).decode('utf-8').strip()
+    except Exception:
+        return None
+
+sentry_sdk.init(
+    dsn=SENTRY_DSH_URL,
+    integrations=[
+            DjangoIntegration(
+                transaction_style='url',
+                middleware_spans=True,
+                # signals_spans=True,
+                # signals_denylist=[
+                #     django.db.models.signals.pre_init,
+                #     django.db.models.signals.post_init,
+                # ],
+                # cache_spans=False,
+            ),
+        ],
+    traces_sample_rate=1.0,  # Adjust this according to your needs
+    send_default_pii=True,  # To capture personal identifiable information (optional)
+    release=get_git_commit_hash(),  # Set the release to the current git commit hash
+    environment=SENTRY_ENVIRONMENT,  # Or "staging", "development", etc.
+    # profiles_sample_rate=1.0,
+)
+
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'handlers': {
+        'console': {
+            'level': 'DEBUG',
+            'class': 'logging.StreamHandler',
+        },
+        'sentry': {
+            'level': 'ERROR',  # Change this to WARNING or INFO if needed
+            'class': 'sentry_sdk.integrations.logging.EventHandler',
+            'formatter': 'verbose',
+        },
+    },
+    'loggers': {
+        'django': {
+            'handlers': ['console', 'sentry'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        'django.request': {
+            'handlers': ['console', 'sentry'],
+            'level': 'ERROR',  # Only log errors to Sentry
+            'propagate': False,
+        },
+        'django.db.backends': {
+            'handlers': ['console', 'sentry'],
+            'level': 'ERROR',  # Only log errors to Sentry
+            'propagate': False,
+        },
+        'django.security': {
+            'handlers': ['console', 'sentry'],
+            'level': 'WARNING',  # You can set this to INFO or DEBUG as needed
+            'propagate': False,
+        },
+        # You can add more loggers here if needed
+    },
+    'formatters': {
+        'verbose': {
+            'format': '%(levelname)s %(asctime)s %(module)s %(process)d %(thread)d %(message)s'
+        },
+    },
+}
+
+CSRF_TRUSTED_ORIGINS = ['https://arpansahu.me', ]
+
+# CORS_ALLOWED_ORIGINS = [
+#     "http://localhost:3000",
+#     "http://127.0.0.1:3000",
+#     "http://localhost:8000",
+#     "http://127.0.0.1:8000",
+#     'https://react-materialui-complete.herokuapp.com'
+# ]
+
+CORS_ALLOW_ALL_ORIGINS = True

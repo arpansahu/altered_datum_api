@@ -1,0 +1,16 @@
+version: '3'
+
+services:
+  web:
+    build:  # This section will be used when running locally
+      context: .
+      dockerfile: Dockerfile
+    image: harbor.arpansahu.me/library/altered_datum_api:latest
+    env_file: ./.env
+    command: bash -c "python manage.py makemigrations && python manage.py migrate && gunicorn --bind 0.0.0.0:8004 altered_datum_api.wsgi"
+    container_name: altered_datum_api
+    volumes:
+      - .:/app
+    ports:
+      - "8004:8004"
+    restart: unless-stopped
