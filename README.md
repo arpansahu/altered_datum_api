@@ -84,7 +84,7 @@ admin login details:--
 username: admin@arpansahu.me
 password: showmecode
 
-Note: We have React UI which is a part of this Project Available at: https://altere-datum.arpansahu.me\
+Note: We have React UI which is a part of this Project Available at: https://altered-datum.arpansahu.me
 
 admin login details:--
 username: admin@arpansahu.me
