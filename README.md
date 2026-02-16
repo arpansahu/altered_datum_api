@@ -1,4 +1,4 @@
-# School Chale Hum | Django School Management App
+# Altered Datum API | Django Blog API Backend
 
 ## Project Features
 
