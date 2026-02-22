@@ -1,1 +1,1 @@
-altered-datum-api.arpansahu.me
+altered-datum-api.arpansahu.space

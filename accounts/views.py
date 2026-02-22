@@ -6,7 +6,7 @@ from django.contrib.auth import get_user_model
 from django.http import JsonResponse
 from django.template.loader import render_to_string
 from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
-from django.utils.encoding import force_bytes, force_text
+from django.utils.encoding import force_bytes, force_str
 from rest_framework.exceptions import ErrorDetail
 from rest_framework import status, permissions
 from rest_framework.generics import UpdateAPIView, RetrieveAPIView
@@ -183,7 +183,7 @@ class AccountActivateView(APIView):
         if serializer.is_valid():
             # print(serializer.data['uidb64'], serializer.data['token'])
             try:
-                uid = force_text(urlsafe_base64_decode(serializer.data['uidb64']))
+                uid = force_str(urlsafe_base64_decode(serializer.data['uidb64']))
                 user = NewUser.objects.get(pk=uid)
                 # print(uid, user)
 
@@ -248,7 +248,7 @@ class ResetPasswordView(APIView):
             print(serializer.data['uidb64'], serializer.data['token'], serializer.data['password1'],
                   serializer.data['password2'])
             try:
-                uid = force_text(urlsafe_base64_decode(serializer.data['uidb64']))
+                uid = force_str(urlsafe_base64_decode(serializer.data['uidb64']))
                 user = NewUser.objects.get(pk=uid)
                 print("this iss it\n", uid, user)
 

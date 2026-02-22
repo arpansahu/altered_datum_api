@@ -395,7 +395,7 @@ CSRF_TRUSTED_ORIGINS = [f'{PROTOCOL}://{DOMAIN}', f'{PROTOCOL}://*.{DOMAIN.split
 #     "http://127.0.0.1:3000",
 #     "http://localhost:8000",
 #     "http://127.0.0.1:8000",
-#     'https://altered-datum.arpansahu.me',
+#     'https://altered-datum.arpansahu.space',
 # ]
 
 CORS_ALLOW_ALL_ORIGINS = True

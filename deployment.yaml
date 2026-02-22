@@ -17,7 +17,7 @@ spec:
       imagePullSecrets:
         - name: harbor-registry-secret
       containers:
-        - image: harbor.arpansahu.me/library/altered_datum_api:latest
+        - image: harbor.arpansahu.space/library/altered_datum_api:latest
           name: altered-datum-api
           envFrom:
             - secretRef:
