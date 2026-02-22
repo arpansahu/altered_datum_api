@@ -1,13 +1,11 @@
 pipeline {
     agent { label 'local' }
     parameters {
-        booleanParam(name: 'DEPLOY', defaultValue: true, description: 'Skip the Check for Changes stage')
+        booleanParam(name: 'DEPLOY', defaultValue: true, description: 'Enable deployment')
         choice(name: 'DEPLOY_TYPE', choices: ['kubernetes', 'docker'], description: 'Select deployment type')
-        string(name: 'IMAGE_TAG', defaultValue: 'latest', description: 'Docker image tag to deploy')
     }
     environment {
-        IMAGE_TAG = "${params.IMAGE_TAG}"  
-        KUBECONFIG = "${env.WORKSPACE}/kubeconfig"
+        KUBECONFIG = "${env.WORKSPACE}/kubeconfig"  // Set the KUBECONFIG environment variable
     }
     stages {
         stage('Initialize') {
@@ -25,41 +23,31 @@ pipeline {
         stage('Setup Environment') {
             steps {
                 script {
-                    withCredentials([file(credentialsId: 'jenkins-admin-credentials', variable: 'CRED_FILE')]) {
-                        // Parse the credentials file to set environment variables
-                        def credentials = readFile(CRED_FILE)
-                        credentials.split('\n').each { line ->
-                            def trimmedLine = line.trim()
-                            if (trimmedLine && !trimmedLine.startsWith('#')) {
-                                def parts = trimmedLine.split('=', 2)
-                                if (parts.length == 2) {
-                                    def key = parts[0].trim()
-                                    def value = parts[1].trim()
-                                    env."${key}" = value
-                                }
+                    // Load .env from Jenkins credentials
+                    withCredentials([file(credentialsId: 'altered_datum_api_env_file', variable: 'ENV_FILE')]) {
+                        // Remove existing .env file if it exists (handles read-only files)
+                        sh 'rm -f .env || true'
+                        
+                        def envContent = readFile(file: env.ENV_FILE)
+                        writeFile(file: '.env', text: envContent)
+                        
+                        // Parse and set environment variables
+                        def envVars = envContent.split('\n')
+                        envVars.each { line ->
+                            if (line && !line.startsWith('#') && line.contains('=')) {
+                                def parts = line.split('=', 2)
+                                def key = parts[0].trim()
+                                def value = parts.length > 1 ? parts[1].trim() : ''
+                                env."${key}" = value
                             }
                         }
-
-                        // Compute derived variables
+                        
+                        // Set derived variables
                         env.BUILD_PROJECT_NAME = "${env.ENV_PROJECT_NAME}_build"
-                        env.PROJECT_NAME_WITH_DASH = env.ENV_PROJECT_NAME.replaceAll('_', '-')
-                        env.NGINX_CONF_PATH = "/etc/nginx/sites-available/${env.PROJECT_NAME_WITH_DASH}"
+                        env.PROJECT_NAME_WITH_DASH = env.ENV_PROJECT_NAME.replace('_', '-')
                         env.REGISTRY = env.DOCKER_REGISTRY
-                        env.REPOSITORY = env.DOCKER_REPOSITORY
-
-                        // Log parsed values for verification
-                        echo "Environment variables loaded:"
-                        echo "ENV_PROJECT_NAME: ${env.ENV_PROJECT_NAME}"
-                        echo "BUILD_PROJECT_NAME: ${env.BUILD_PROJECT_NAME}"
-                        echo "PROJECT_NAME_WITH_DASH: ${env.PROJECT_NAME_WITH_DASH}"
-                        echo "SERVER_NAME: ${env.SERVER_NAME}"
-                        echo "DOCKER_PORT: ${env.DOCKER_PORT}"
-                        echo "NGINX_CONF_PATH: ${env.NGINX_CONF_PATH}"
-                        echo "REGISTRY: ${env.REGISTRY}"
-                        echo "REPOSITORY: ${env.REPOSITORY}"
-                        echo "JENKINS_DOMAIN: ${env.JENKINS_DOMAIN}"
-                        echo "SENTRY_ORG: ${env.SENTRY_ORG}"
-                        echo "SENTRY_PROJECT: ${env.SENTRY_PROJECT}"
+                        env.REPOSITORY = "${env.DOCKER_REPOSITORY}/${env.DOCKER_IMAGE_NAME}"
+                        env.NGINX_CONF = "/etc/nginx/sites-available/${env.PROJECT_NAME_WITH_DASH}"
                     }
                 }
             }
@@ -83,16 +71,16 @@ pipeline {
                     echo "Updating Nginx configuration from repository..."
 
                     // Always update the config to ensure it matches the repository version
-                    sh "sudo cat nginx.conf | sudo tee ${env.NGINX_CONF_PATH} > /dev/null"
+                    sh "sudo cat nginx.conf | sudo tee ${NGINX_CONF} > /dev/null"
 
                     // Replace placeholders in the configuration file
-                    sh "sudo sed -i 's|SERVER_NAME|${env.SERVER_NAME}|g' ${env.NGINX_CONF_PATH}"
-                    sh "sudo sed -i 's|DOCKER_PORT|${env.DOCKER_PORT}|g' ${env.NGINX_CONF_PATH}"
+                    sh "sudo sed -i 's|SERVER_NAME|${SERVER_NAME}|g' ${NGINX_CONF}"
+                    sh "sudo sed -i 's|DOCKER_PORT|${DOCKER_PORT}|g' ${NGINX_CONF}"
 
                     echo "✅ Nginx configuration updated successfully"
 
                     // Ensure Nginx is aware of the configuration
-                    sh "sudo ln -sf ${env.NGINX_CONF_PATH} /etc/nginx/sites-enabled/"
+                    sh "sudo ln -sf ${NGINX_CONF} /etc/nginx/sites-enabled/"
                     
                     // Test nginx configuration
                     sh "sudo nginx -t"
@@ -101,49 +89,70 @@ pipeline {
         }
         stage('Retrieve Image Tag from Build Job') {
             when {
-                expression { params.DEPLOY}
+                expression { params.DEPLOY }
             }
             steps {
                 script {
-                    echo "Retrieve image tag from ${env.BUILD_PROJECT_NAME}"
-
-                    // Construct the API URL for the latest build
-                    def api_url = "https://${env.JENKINS_DOMAIN}/job/${env.BUILD_PROJECT_NAME}/lastSuccessfulBuild/api/json"
-
-                    // Log the API URL for debugging purposes
-                    echo "Hitting API URL: ${api_url}"
-                    
-                    withCredentials([usernamePassword(credentialsId: 'jenkins-admin-credentials', usernameVariable: 'JENKINS_USER', passwordVariable: 'JENKINS_PASS')]) {
-                        // Execute the curl command to retrieve the JSON response
-                        echo "usernameVariable: ${JENKINS_USER}, passwordVariable: ${JENKINS_PASS}"
-                        def buildInfoJson = sh(script: "curl -u ${JENKINS_USER}:${JENKINS_PASS} ${api_url}", returnStdout: true).trim()
-
-                        // Log the raw JSON response for debugging
-                        echo "Raw JSON response: ${buildInfoJson}"
-
-                        def imageTag = sh(script: """
-                            echo '${buildInfoJson}' | grep -oP '"number":\\s*\\K\\d+' | head -n 1
-                        """, returnStdout: true).trim()
-
-                        echo "Retrieved image tag (build number): ${imageTag}"
-
-
-                        // Check if REGISTRY, REPOSITORY, and imageTag are all defined and not empty
-                        if (env.REGISTRY && env.REPOSITORY && imageTag) {
-                            if (params.DEPLOY_TYPE == 'kubernetes') {
-                                // Replace the placeholder in the deployment YAML
-                                sh "sed -i 's|:latest|:${imageTag}|g' ${WORKSPACE}/deployment.yaml"
-                            }   
-                            
-                            if (params.DEPLOY_TYPE == 'docker') {
-                                // Ensure the correct image tag is used in the docker-compose.yml
-                                sh """
-                                sed -i 's|image: .*|image: ${env.REGISTRY}/${env.REPOSITORY}:${imageTag}|' docker-compose.yml
-                                """
-                            }
-                        } else {
-                            echo "One or more required variables (REGISTRY, REPOSITORY, imageTag) are not defined or empty. Skipping docker-compose.yml update."
+                    withCredentials([usernamePassword(
+                        credentialsId: 'jenkins-admin-credentials',
+                        usernameVariable: 'JENKINS_USER',
+                        passwordVariable: 'JENKINS_TOKEN'
+                    )]) {
+                        // Query Jenkins API to get the last successful build number
+                        def buildJobName = "${env.ENV_PROJECT_NAME}_build"
+                        def jenkinsUrl = "https://jenkins.arpansahu.space"
+                        def apiUrl = "${jenkinsUrl}/job/${buildJobName}/lastSuccessfulBuild/api/json"
+                        
+                        echo "Querying Jenkins API: ${apiUrl}"
+                        
+                        def buildInfoJson = sh(
+                            script: "curl -s -u ${JENKINS_USER}:${JENKINS_TOKEN} '${apiUrl}'",
+                            returnStdout: true
+                        ).trim()
+                        
+                        echo "Build info: ${buildInfoJson}"
+                        
+                        // Extract the build number (id) from the JSON response
+                        def imageTag = sh(
+                            script: """echo '${buildInfoJson}' | grep -o '"id":"[0-9]*"' | head -1 | tr -dc '0-9'""",
+                            returnStdout: true
+                        ).trim()
+                        
+                        if (!imageTag) {
+                            error "Failed to retrieve image tag from build job. Build info: ${buildInfoJson}"
                         }
+                        
+                        echo "Retrieved image tag: ${imageTag}"
+                        env.IMAGE_TAG = imageTag
+                    }
+                }
+            }
+        }
+        stage('Prepare Deployment Config') {
+            when {
+                expression { params.DEPLOY }
+            }
+            steps {
+                script {
+                    echo "Using image tag from build job: ${env.IMAGE_TAG}"
+
+                    // Check if REGISTRY, REPOSITORY, and IMAGE_TAG are all defined and not empty
+                    if (env.REGISTRY && env.REPOSITORY && env.IMAGE_TAG) {
+                        if (params.DEPLOY_TYPE == 'kubernetes') {
+                            // Replace the placeholder in the deployment YAML
+                            sh "sed -i 's|:latest|:${env.IMAGE_TAG}|g' ${WORKSPACE}/deployment.yaml"
+                            echo "Updated deployment.yaml with image tag: ${env.IMAGE_TAG}"
+                        }   
+                        
+                        if (params.DEPLOY_TYPE == 'docker') {
+                            // Ensure the correct image tag is used in the docker-compose.yml
+                            sh """
+                            sed -i 's|image: .*|image: ${env.REGISTRY}/${env.REPOSITORY}:${env.IMAGE_TAG}|' docker-compose.yml
+                            """
+                            echo "Updated docker-compose.yml with image tag: ${env.IMAGE_TAG}"
+                        }
+                    } else {
+                        error "Required variables (REGISTRY, REPOSITORY, IMAGE_TAG) are missing. Cannot proceed with deployment."
                     }
                 }
             }
@@ -155,9 +164,6 @@ pipeline {
             steps {
                 script {
                     if (params.DEPLOY_TYPE == 'docker') {
-
-                        // Copy the .env file to the workspace
-                        sh "sudo cp /root/projectenvs/${env.ENV_PROJECT_NAME}/.env ${env.WORKSPACE}/"
 
                         sh 'docker-compose down'
                         sh 'docker-compose pull'
@@ -177,7 +183,7 @@ pipeline {
                                 
                                 # Update Nginx configuration if status code is 200 (OK)
                                 if [ "\$HTTP_STATUS" -eq 200 ]; then
-                                    sudo sed -i 's|proxy_pass .*;|proxy_pass http://0.0.0.0:${env.DOCKER_PORT};|' ${env.NGINX_CONF_PATH}
+                                    sudo sed -i 's|proxy_pass .*;|proxy_pass http://0.0.0.0:${env.DOCKER_PORT};|' ${env.NGINX_CONF}
                                     sudo nginx -s reload
                                     echo 'Nginx configuration updated and reloaded successfully.'
                                 else
@@ -195,33 +201,15 @@ pipeline {
                             """
                         }
                     } else if (params.DEPLOY_TYPE == 'kubernetes') {
-                        // Copy the .env file to the workspace
-                        sh "sudo cp /root/projectenvs/${env.ENV_PROJECT_NAME}/.env ${env.WORKSPACE}/"
-
-                        // Check if the file is copied successfully
-                        if (fileExists("${env.WORKSPACE}/.env")) {
-                            echo ".env file copied successfully."
-                            
-                            // Verify Kubernetes configuration
-                            sh 'kubectl cluster-info'
+                        // Verify Kubernetes configuration
+                        sh 'kubectl cluster-info'
                             
                             // Print current directory
                             sh 'pwd'
                             
-                            // Delete existing secret if it exists
+                            // Create or update secret (delete + recreate to avoid conflicts)
                             sh """
-                            kubectl delete secret ${env.PROJECT_NAME_WITH_DASH}-secret || true
-                            """
-
-                            // Delete the existing service and deployment
-                            // sh """
-                            // kubectl delete service ${env.PROJECT_NAME_WITH_DASH}-service || true
-                            // kubectl scale deployment ${env.PROJECT_NAME_WITH_DASH}-app --replicas=0 || true
-                            // kubectl delete deployment ${env.PROJECT_NAME_WITH_DASH}-app || true
-                            // """
-
-                            // Deploy to Kubernetes
-                            sh """
+                            kubectl delete secret ${env.PROJECT_NAME_WITH_DASH}-secret --ignore-not-found=true
                             kubectl create secret generic ${env.PROJECT_NAME_WITH_DASH}-secret --from-env-file=${WORKSPACE}/.env
                             kubectl apply -f ${WORKSPACE}/service.yaml
                             kubectl apply -f ${WORKSPACE}/deployment.yaml
@@ -230,15 +218,10 @@ pipeline {
                             // Wait for a few seconds to let the app start
                             sleep 60
 
-                            // Check deployment status
-                            // sh """
-                            // kubectl rollout status deployment/${env.PROJECT_NAME_WITH_DASH}-app
-                            // """
-
                             sh """
                                 kubectl describe deployment/${env.PROJECT_NAME_WITH_DASH}-app
                             """
-                            
+
                             // Verify service and get NodePort
                             def nodePort = sh(script: "kubectl get service ${env.PROJECT_NAME_WITH_DASH}-service -o=jsonpath='{.spec.ports[0].nodePort}'", returnStdout: true).trim()
                             echo "Service NodePort: ${nodePort}"
@@ -255,8 +238,8 @@ pipeline {
                                 if [ "\$HTTP_STATUS" -eq 200 ]; then
                                     echo "Service is reachable at http://${clusterIP}:${nodePort}"
 
-                                    echo "Updating Nginx configuration at ${env.NGINX_CONF_PATH}..."
-                                    sudo sed -i 's|proxy_pass .*;|proxy_pass http://${clusterIP}:${nodePort};|' ${env.NGINX_CONF_PATH}
+                                    echo "Updating Nginx configuration at ${env.NGINX_CONF}..."
+                                    sudo sed -i 's|proxy_pass .*;|proxy_pass http://${clusterIP}:${nodePort};|' ${env.NGINX_CONF}
                                     
                                     if [ \$? -ne 0 ]; then
                                         echo "Failed to update Nginx configuration"
@@ -293,9 +276,6 @@ pipeline {
                                     exit 1
                                 fi
                             """
-                        } else {
-                            error ".env file not found in the workspace."
-                        }
                     }
                     currentBuild.description = 'DEPLOYMENT_EXECUTED'
                 }
@@ -368,30 +348,32 @@ pipeline {
             }
         }
         failure {
-            sh """curl -s \
-            -X POST \
-            --user $MAIL_JET_API_KEY:$MAIL_JET_API_SECRET \
-            https://api.mailjet.com/v3.1/send \
-            -H "Content-Type:application/json" \
-            -d '{
-                "Messages":[
-                        {
-                                "From": {
-                                        "Email": "$MAIL_JET_EMAIL_ADDRESS",
-                                        "Name": "ArpanSahuOne Jenkins Notification"
-                                },
-                                "To": [
-                                        {
-                                                "Email": "$MY_EMAIL_ADDRESS",
-                                                "Name": "Developer Team"
-                                        }
-                                ],
-                            "Subject": "Jenkins Build Pipeline your project ${currentBuild.fullDisplayName} Ran Failed",
-                            "TextPart": "Hola Development Team, your project ${currentBuild.fullDisplayName} deployment failed",
-                            "HTMLPart": "<h3>Hola Development Team, your project ${currentBuild.fullDisplayName} is not deployed, Build Failed </h3> <br> <p> Build Url: ${env.BUILD_URL}  </p>"
-                        }
-                ]
-            }'"""
+            script {
+                sh """curl -s \
+                -X POST \
+                --user $MAIL_JET_API_KEY:$MAIL_JET_API_SECRET \
+                https://api.mailjet.com/v3.1/send \
+                -H "Content-Type:application/json" \
+                -d '{
+                    "Messages":[
+                            {
+                                    "From": {
+                                            "Email": "$MAIL_JET_EMAIL_ADDRESS",
+                                            "Name": "ArpanSahuOne Jenkins Notification"
+                                    },
+                                    "To": [
+                                            {
+                                                    "Email": "$MY_EMAIL_ADDRESS",
+                                                    "Name": "Developer Team"
+                                            }
+                                    ],
+                                "Subject": "Jenkins Build Pipeline your project ${currentBuild.fullDisplayName} Ran Failed",
+                                "TextPart": "Hola Development Team, your project ${currentBuild.fullDisplayName} deployment failed",
+                                "HTMLPart": "<h3>Hola Development Team, your project ${currentBuild.fullDisplayName} is not deployed, Build Failed </h3> <br> <p> Build Url: ${env.BUILD_URL}  </p>"
+                            }
+                    ]
+                }'"""
+            }
         }
     }
 }
